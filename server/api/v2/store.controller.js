@@ -70,10 +70,10 @@ exports.index = function(req, res){
 		if(criteria.location !== null){
 			Store.geoNear(criteria.location,{query:{sticky:false},limit:criteria.limit,spherical:true, maxDistance: criteria.distance/DISTANCE_MULTIPLIER, distanceMultiplier: DISTANCE_MULTIPLIER}).then(function (geoNearData, stats){
 				if(stickyData.length > 0 && geoNearData.length > 0){
-					Response.success(res, stickyData.concat(geoNearData));
+					Response.success(res, stickyData.concat(geoNearData), true);
 				} else if(geoNearData.length > 0){
 					// kemablikan hanya data geonear
-					Response.success(res, geoNearData);
+					Response.success(res, geoNearData, true);
 				} else {
 					Response.nodata(res);
 				}
@@ -81,9 +81,9 @@ exports.index = function(req, res){
 		} else {
 			Store.find({sticky:false},null,{limit:criteria.limit, skip:criteria.offset}, function (err, randomData){
 				if(stickyData.length > 0 && randomData.length > 0){
-					Response.success(res,stickyData.concat(randomData));
+					Response.success(res,stickyData.concat(randomData), true);
 				} else if (randomData.length > 0){
-					Response.success(res,randomData);
+					Response.success(res,randomData, true);
 				} else {
 					Response.nodata(res);
 				}

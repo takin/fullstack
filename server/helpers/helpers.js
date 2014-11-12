@@ -19,7 +19,6 @@ var helpers = {
 	},
 	Response: function(){
 		var filterOutput = function(data){
-			console.log(data);
 			var response = [];
 			data.forEach(function (e,i){
 				var temp = {};
@@ -35,7 +34,7 @@ var helpers = {
 				temp.description = e.description;
 				temp.numPhotos = e.photos.length;
 				temp.rating = e.rating;
-				temp.numComments = e.comments.length;
+				temp.numComments = e.comment.length;
 				temp.sticky = e.sticky;
 				temp.tags = e.tags;
 				response.push(temp);

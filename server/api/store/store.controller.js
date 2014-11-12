@@ -39,7 +39,6 @@ exports.vote = function (req, res){
 exports.index = function (req, res, next) {
   Store.getSummryStore(req.query, function (err, stores) {
     if(err) { return handleError(res, err); }
-    res.type('application/json');
     return res.json(200, stores);
   });
 };

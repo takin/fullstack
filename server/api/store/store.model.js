@@ -17,8 +17,8 @@ var StoreSchema = new Schema({
 	address: {type:String,required:true},
 	telp: {type:String}, // re-check the feature!!!
 	website:{type:String}, // re-check the feature!! 
-	operationTimeStart:Number, // re-check again!!
-	operationTimeEnd:Number,
+	operationTimeStart:{type:String, required: true, default:'00.00'}, // re-check again!!
+	operationTimeEnd:{type:String, required:true, default:'00.00'},
 	tags: [{type: String, index: true}],
 	description: {type:String, min: 10, max: 500, required: true},
 	coordinates:{type:[Number], index:'2dsphere'}, //[longitude, lattitude]
@@ -59,7 +59,8 @@ StoreSchema.statics.getSummryStore = function(query,callback) {
 				temp.telp = e.telp;
 				temp.location = e.location;
 				temp.website = e.website;
-				temp.operationTime = e.operationTime;
+				temp.operationTimeStart = e.operationTimeStart;
+				temp.operationTimeEnd = e.operationTimeEnd;
 				temp.description = e.description;
 				temp.numPhotos = e.photos.length;
 				temp.rating = e.rating;

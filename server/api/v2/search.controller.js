@@ -14,7 +14,9 @@ exports.index = function(req, res){
 	var query = {
 		limit: 20,
 		offset: 0,
-		open_only: false
+		open_only: false,
+		keyword: null,
+		keyword_type: null
 	};
 
 	var SEARCH_RESULT;
@@ -56,6 +58,7 @@ exports.index = function(req, res){
 				if(rawLocation[0] < 90){
 					query.location = [parseFloat(rawLocation[1]), parseFloat(rawLocation[0])]; // [llongitude,lattitude]
 				} else {
+					console.log('longitude salah');
 					Response.error.invalidFormat(res);
 				}
 			} else {
@@ -86,10 +89,10 @@ exports.index = function(req, res){
 
 	if(typeof(req.query.open_only) !== 'undefined'){
 		if(req.query.open_only == 'true' || req.query.open_only == 'false' || req.query.open_only == '0' || req.query.open_only == '1'){
-			if(req.query.open_only != 'true' || req.query.open_only != '1'){
-			query.open_only = true;
+			if(req.query.open_only == 'true' || req.query.open_only == '1'){
+				query.open_only = true;
 			}
-			if(req.query.open_only != 'false' || req.query.open_only != '0'){
+			if(req.query.open_only == 'false' || req.query.open_only == '0'){
 				query.open_only = false;
 			}	
 		} else {
@@ -100,21 +103,25 @@ exports.index = function(req, res){
 	if(query.radius){
 		Store.geoNear(query.location, {maxDistance:query.radius, spherical:true}, function (err, data){
 			if(err || typeof(data) === 'undefined'){ Response.error.invalidFormat(res); }
-			if(typeof(data) === 'object' && data.length <= 0){ Response.nodata(res); }
-			processRadiusResponse(res, query, data);
+			else { processRadiusResponse(res, query, data);}
 		});
 	} else {
-		if(query.keyword_type == 'name'){
-			Store.find({name:new RegExp(query.keyword + '.*','i')},null,{skip:query.offset, limit: query.limit}).populate('category', 'name').exec(function (err, data){
-				if(err) Response.error.invalidFormat(res);
-				(data.length > 0) ? Response.success(res, filterOutput(data)) : Response.nodata(res);
-			});
-		} else if(query.keyword_type == 'tags'){
-			Store.find({tags:new RegExp(query.keyword + '.*','i')},null,{skip:query.offset, limit: query.limit}).populate('category', 'name').exec(function (err, data){
-				if(err) Response.error.invalidFormat(res);
-				(data.length > 0) ? Response.success(res, data) : Response.nodata(res);
-			});
-		}
+
+		var currentTime = parseInt((new Date().getUTCHours()) + 7);
+		var conditions = (query.keyword_type == 'name') ? {name:new RegExp(query.keyword + '.*','i')} : {tags:new RegExp(query.keyword + '.*','i')};
+		var options = {skip:query.offset, limit: query.limit};
+
+		Store.find(conditions,null,options).populate('category', 'name').exec(function (err, data){
+			if(err) {Response.error.invalidFormat(res);}
+			else {
+				if(query.open_only){
+					data = data.filter(function (element){
+						return element.open === true;
+					});
+				}
+				Response.success(res, data, true);
+			}
+		});
 	}
 };
 
@@ -124,43 +131,20 @@ function processRadiusResponse(res, query, data){
 		theData[index] = element.obj;
 	});
 
-	if(query.keyword_type === 'tags'){
-		var prop = query.keyword.split(" ");
-		var result = _.where(theData,{tags:prop});
-		var filtered = filterOutput(result);
-		Store.populate(filtered, {path:'category', model:'Category', select:'name'}, function (err, result){
-			res.json(result);
+	if(query.open_only){
+		theData = theData.filter(function (element){
+			return element.open === true;
 		});
-	} else if(query.keyword_type === 'name'){
-		var result = _.where(theData,{name:query.keyword});
-		var filtered = filterOutput(result);
-		Store.populate(filtered, {path:'category', model:'Category', select:'name'}, function (err, result){
-			res.json(result);
-		});
+	}
+
+	if(query.keyword_type === null || query.keyword === null){
+		Response.success(res,theData, true);
 	} else {
-		res.json(filterOutput(data));
+		var prop = query.keyword.split(" ");
+		var result = (query.keyword_type === 'tags') ? _.where(theData,{tags:prop}) : _.where(theData,{name:query.keyword});
+		
+		Store.populate(result, {path:'category', model:'Category', select:'name'}, function (err, result){
+			Response.success(res,result, true);
+		});
 	}
 }
-exports.nearby = function(req, res){
-	/*
-	Category.findOne({name:'Restaurant'}).exec(function (err, d){
-		Store.find({category:d._id}).exec(function(a,b){
-			var x = [];
-			for(var i = 0; i < b.length; i++){
-				d.storeMember.push(b[i]._id);
-			}
-			d.save(function(){
-				res.json(d);
-			})
-		})
-	})
-
-	Store.findOne({name:'Extra Hot Babarsari'}).exec(function (a,b){
-		Comment.find({store:b._id}).exec(function (c,d){
-			b.comment.push(d[0]._id);
-			b.save();
-			res.json(d);
-		});
-	})
-	*/
-};

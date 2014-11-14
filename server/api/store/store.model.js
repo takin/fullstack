@@ -17,8 +17,8 @@ var StoreSchema = new Schema({
 	address: {type:String,required:true},
 	telp: {type:String}, // re-check the feature!!!
 	website:{type:String}, // re-check the feature!! 
-	operationTimeStart:{type:String, required: true, default:'00.00'}, // re-check again!!
-	operationTimeEnd:{type:String, required:true, default:'00.00'},
+	operationTimeStart:{type:Number, required: true, default:0}, // re-check again!!
+	operationTimeEnd:{type:Number, required:true, default:0},
 	tags: [{type: String, index: true}],
 	description: {type:String, min: 10, max: 500, required: true},
 	coordinates:{type:[Number], index:'2dsphere'}, //[longitude, lattitude]
@@ -57,6 +57,7 @@ StoreSchema.statics.getSummryStore = function(query,callback) {
 				temp.address = e.address;
 				temp.photo = (e.photos.length > 0) ? e.photos[e.photos.length - 1] : null;
 				temp.telp = e.telp;
+				temp.open = e.open;
 				temp.location = e.location;
 				temp.website = e.website;
 				temp.operationTimeStart = e.operationTimeStart;
@@ -113,6 +114,10 @@ StoreSchema.virtual('rating').get(function(){
 	return Math.ceil(this.votes.reduce(function (a,b){
 		return a + b;
 	}) / this.votes.length);
+});
+StoreSchema.virtual('open').get(function(){
+	var currentTime = (new Date().getUTCHours()) + 7;
+	return ((parseInt(this.operationTimeStart) < currentTime) &&  (parseInt(this.operationTimeEnd) > currentTime));
 });
 StoreSchema.virtual('numComments').get(function(){
 	return this.comment.length;

@@ -18,7 +18,9 @@ var helpers = {
 		};
 	},
 	Response: function(){
-		var filterOutput = function(data){
+		return {
+			filterOutput:function(data){
+				
 			var response = [];
 			data.forEach(function (e,i){
 				var temp = {};
@@ -27,7 +29,7 @@ var helpers = {
 				temp.coordinates = e.coordinates;
 				temp.name = e.name;
 				temp.address = e.address;
-				temp.photo = e.photo;
+				temp.photos = e.photos;
 				temp.telp = e.telp;
 				temp.website = e.website;
 				temp.operationTimeStart = e.operationTimeStart;
@@ -38,12 +40,11 @@ var helpers = {
 				temp.numComments = e.comment.length;
 				temp.sticky = e.sticky;
 				temp.tags = e.tags;
+				temp.open = e.open;
 				response.push(temp);
 			});
 			return response;
-		};
-
-		return {
+		},
 			error: {
 				invalidFormat: function(res){
 					return res.json(403,{message: "Invalid format!"});
@@ -58,11 +59,11 @@ var helpers = {
 			nodata: function(res){
 				return res.json(200,{message:"Tidak ada data"});
 			},
-			success: function(res, data, filter){
+			success: function(res, data, filter, openOnly){
 				if(typeof(filter) === 'undefined'){
 					return res.json(data)
 				} else {
-					var output = filterOutput(data);
+					var output = this.filterOutput(data);
 					return res.json(output);
 				}
 			},

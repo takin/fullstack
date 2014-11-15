@@ -34,8 +34,8 @@ exports.vote = function (req, res){
     if(err) { return Response.error.invalidFormat(res); }
     store.votes.push(req.body.votes);
     store.save(function (err){
-      if(err) { return Response.error.invalidFormat(res); }
-      return Response.success(res,store);
+      if(err) {return Response.error.invalidFormat(res); }
+      return res.json(200,"success");
     });
   });
 }

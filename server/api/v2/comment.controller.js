@@ -45,10 +45,10 @@ exports.create = function(req, res) {
   Store.findById(req.body.store, function (err, store){
     if(err || store == null){ Response.error.notFound(res); }
     Comment.create(req.body, function (err, comment){
-      if(err){ Response.error.notFound(res); }
+      if(err){ return Response.error.notFound(res); }
       store.comment.push(comment._id);
       store.save(function (err){
-        err ? Response.error.notFound(res) : Response.success(res, comment);
+        return err ? Response.error.notFound(res) : Response.success(res, comment);
       });
     });
   });

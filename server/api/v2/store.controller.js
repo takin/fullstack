@@ -33,9 +33,9 @@ exports.vote = function (req, res){
   Store.findById(req.params.store).exec(function (err, store){
     if(err) { return Response.error.invalidFormat(res); }
     store.votes.push(req.body.votes);
-    store.save(function (err, data){
+    store.save(function (err){
       if(err) { return Response.error.invalidFormat(res); }
-      return Response.success(res,data, true);
+      return Response.success(res,store);
     });
   });
 }

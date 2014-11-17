@@ -3,15 +3,14 @@
 var _ = require('lodash');
 var Store = require('../store/store.model');
 var Comment = require('../comment/comment.model');
-var helpers = require('../../helpers/helpers');
-var Validate = helpers.Validate();
-var Response = helpers.Response();
+var Helpers = require('../../helpers/helpers');
+var Validate = Helpers.Validate;
+var Response = Helpers.Response;
 
 
 // Get list of comments
 exports.index = function(req, res) {
-  Store.findById(req.params.sid).populate({path:'comment', model:'Comment'}).exec(function (err, comments){
-    console.log(comments);
+  Store.findById(req.params.sid).populate({path:'comment', model:'Comment',match:{show:true}}).exec(function (err, comments){
     if(err){
       Response.error.invalidFormat(res);
     } else if (comments === null || (typeof(comments) !== 'undefined' && comments.length > 0)) {

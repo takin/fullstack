@@ -6,6 +6,7 @@ ObjectId = Schema.ObjectId;
 
 var CommentSchema = new Schema({
 	author: {type: String, required: true},
+	providerId:{type:String},
 	store:{type: Schema.Types.ObjectId, ref: 'Store'},
 	date: {type: Date, default: Date.now},
 	message: {type: String, min: 10, max: 200, required: true},

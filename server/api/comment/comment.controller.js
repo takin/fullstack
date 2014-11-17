@@ -3,9 +3,9 @@
 var _ = require('lodash');
 var Store = require('../store/store.model');
 var Comment = require('../comment/comment.model');
-var helpers = require('../../helpers/helpers');
-var Validate = helpers.Validate();
-var Response = helpers.Response();
+var Helpers = require('../../helpers/helpers');
+var Validate = Helpers.Validate;
+var Response = Helpers.Response;
 
 // update show/hide komentar
 exports.approve = function(req, res){

@@ -9,9 +9,9 @@ var compose = require('composable-middleware');
 var User = require('../api/user/user.model');
 var validateJwt = expressJwt({ secret: config.secrets.session });
 var appToken = jwt.sign({media:"device"},"kulinerapptoken");
-var helpers = require('../helpers/helpers');
-var Response = helpers.Response();
-var Validate = helpers.Validate();
+var Helpers = require('../helpers/helpers');
+var Validate = Helpers.Validate;
+var Response = Helpers.Response;
 
 // fungsi untuk melakukan autentifikasi awal
 var VALIDATE = {

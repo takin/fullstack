@@ -5,6 +5,9 @@ var Store = require('./store.model');
 var Category = require('../category/category.model');
 var fs = require('fs');
 var config = require('../../config/environment/index');
+var Helpers = require('../../helpers/helpers');
+var Validate = Helpers.Validate;
+var Response = Helpers.Response;
 // var imagick = require('imagemagick-native');
 var path = require('path');
 // var gm = require('gm').subClass({imageMagick:true});
@@ -37,9 +40,9 @@ exports.vote = function (req, res){
 
 // Get list of stores
 exports.index = function (req, res, next) {
-  Store.getSummryStore(req.query, function (err, stores) {
+  Store.find(req.query, function (err, stores) {
     if(err) { return handleError(res, err); }
-    return res.json(200, stores);
+    return Response.success(res, stores, true);
   });
 };
 
@@ -100,23 +103,37 @@ exports.update = function (req, res) {
      * penghapusan elemen array tertentu tidak dapat dilakukan
      * 
      */
-      Category.findById(store.category, function (err, category){
-        if(store.category.toString() !== req.body.category){
-          category.storeMember.pop(store._id);
-          category.save(function (err){
-            if (err) { return handleError(res, err); }
-            Category.findById(req.body.category, function (err, newCategory){
-              newCategory.storeMember.push(store._id);
-              newCategory.save(function (err){
-                if (err) { return handleError(res, err); }
-                saveStore(req, res, store);
-              })
-            });
-          });
-        } else {
-          saveStore(req, res, store);
-        }
+     // hanya update stick/ show saja
+     if(typeof(req.body.category) === 'undefined'){
+      if(typeof(req.body.sticky) !== 'undefined'){
+        store.sticky = req.body.sticky;
+      }
+      if(typeof(req.body.show) !== 'undefined'){
+        store.show = req.body.show;
+      }
+      store.save(function (err){
+        if (err) { return handleError(res, err); }
+        return res.json(store);
       });
+     } else {
+        Category.findById(store.category, function (err, category){
+          if(store.category.toString() !== req.body.category){
+            category.storeMember.pop(store._id);
+            category.save(function (err){
+              if (err) { return handleError(res, err); }
+              Category.findById(req.body.category, function (err, newCategory){
+                newCategory.storeMember.push(store._id);
+                newCategory.save(function (err){
+                  if (err) { return handleError(res, err); }
+                  saveStore(req, res, store);
+                })
+              });
+            });
+          } else {
+            saveStore(req, res, store);
+          }
+        });
+      }
   });
 };
 

@@ -13,6 +13,7 @@ ObjectId = Schema.ObjectId;
 
 var StoreSchema = new Schema({
 	name: {type:String,required:true},
+	show:{type:Boolean, default: false},
 	sticky: {type:Boolean, default: false},
 	address: {type:String,required:true},
 	telp: {type:String}, // re-check the feature!!!

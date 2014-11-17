@@ -1,8 +1,8 @@
 'use strict';
 var Store = require('../store/store.model');
-var helpers = require('../../helpers/helpers');
-var Validate = helpers.Validate();
-var Response = helpers.Response();
+var Helpers = require('../../helpers/helpers');
+var Validate = Helpers.Validate;
+var Response = Helpers.Response;
 var DISTANCE_MULTIPLIER = 6378137; //  konversi satuan meter ke dalam bentuk dari radians
 var CRITERIA = { DISTANCE_DEFAULT: 3000, LOCATION_DEFAULT:null, LIMIT_DEFAULT:20, OFFSET_DEFAULT:0 };
 
@@ -47,8 +47,15 @@ exports.index = function(req, res){
 		distance: 3000,
 		location: null,
 		limit: 20,
-		offset: 0
+		offset: 0,
+		show_all: true
 	};
+
+	if(typeof(req.query.show_all) !== 'undefined'){
+		if(req.query.show_all == 'false'){
+			criteria.show_all = false;
+		}
+	}
 
 	// cek apakah query location dikirimkan atau tidak
 	// cek juga apakah valid atau tidak
@@ -100,9 +107,12 @@ exports.index = function(req, res){
 		}
 	}
 	// ambil hanya data yang di flag sticky true
-	Store.find({sticky:true},null, function (err,stickyData){
+	Store.find({sticky:true, show:criteria.show_all}, function (err,stickyData){
+		if(err){
+			return res.json(err);
+		}
 		if(criteria.location !== null){
-			Store.geoNear(criteria.location,{query:{sticky:false},limit:criteria.limit,spherical:true, maxDistance: criteria.distance/DISTANCE_MULTIPLIER, distanceMultiplier: DISTANCE_MULTIPLIER}).then(function (geoNearData, stats){
+			Store.geoNear(criteria.location,{query:{sticky:false, show:criteria.show_all},limit:criteria.limit,spherical:true, maxDistance: criteria.distance/DISTANCE_MULTIPLIER, distanceMultiplier: DISTANCE_MULTIPLIER}).then(function (geoNearData, stats){
 				if(stickyData.length > 0 && geoNearData.length > 0){
 					return Response.success(res, stickyData.concat(geoNearData), true);
 				}
@@ -113,7 +123,7 @@ exports.index = function(req, res){
 				return Response.nodata(res);
 			});
 		} else {
-			Store.find({sticky:false},null,{limit:criteria.limit, skip:criteria.offset}, function (err, randomData){
+			Store.find({sticky:false, show: criteria.show_all},null,{limit:criteria.limit, skip:criteria.offset}, function (err, randomData){
 				if(stickyData.length > 0 && randomData.length > 0){
 					return Response.success(res,stickyData.concat(randomData), true);
 				} 
@@ -128,7 +138,8 @@ exports.index = function(req, res){
 };
 
 exports.byCategory = function(req, res){
-	Store.find({category:req.params.categoryId}, function (err, stores){
+	var isShow = (typeof(req.query.show_all) !== 'undefined' && req.query.show_all === false);
+	Store.find({category:req.params.categoryId, show:isShow}, function (err, stores){
 		if(err){ return Response.error.invalidFormat(res); }
 		return Response.success(res, stores, true);
 	});

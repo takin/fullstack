@@ -17,8 +17,10 @@ router.get('/stores/category/:categoryId', authV2.isAllowed, store.byCategory);
 router.get('/stores/:storeId', authV2.isAllowed, store.show);
 router.post('/stores',auth.hasRole('admin'),store.create);
 router.post('/stores/vote/:store', authV2.isAllowed, store.vote);
+
 router.put('/stores/:store',auth.hasRole('admin'),store.update);
 router.patch('/stores/:store', auth.hasRole('admin'), store.update);
+
 router.delete('/stores/:store', auth.hasRole('admin'),store.destroy);
 
 router.get('/search', search.index);

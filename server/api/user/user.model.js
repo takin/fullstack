@@ -13,6 +13,7 @@ var UserSchema = new Schema({
   role          : {type:String,default:'user'},
   hashedPassword: String,
   provider      : String,
+  providerId    : String,
   salt          : String
 });
 

@@ -138,7 +138,7 @@ exports.index = function(req, res){
 };
 
 exports.byCategory = function(req, res){
-	var isShow = (typeof(req.query.show_all) !== 'undefined' && req.query.show_all === false);
+	var isShow = (typeof(req.query.show_all) !== 'undefined' && req.query.show_all == 'false');
 	Store.find({category:req.params.categoryId, show:isShow}, function (err, stores){
 		if(err){ return Response.error.invalidFormat(res); }
 		return Response.success(res, stores, true);

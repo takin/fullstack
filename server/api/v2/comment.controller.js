@@ -43,6 +43,8 @@ exports.index = function(req, res) {
 exports.create = function(req, res) {
   Store.findById(req.body.store, function (err, store){
     if(err || store == null){ Response.error.notFound(res); }
+    var date = new Date(req.body.date);
+    req.body.date = date;
     Comment.create(req.body, function (err, comment){
       if(err){ return Response.error.notFound(res); }
       store.comment.push(comment._id);

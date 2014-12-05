@@ -40,7 +40,15 @@ exports.vote = function (req, res){
 
 // Get list of stores
 exports.index = function (req, res, next) {
-  Store.find(req.query, function (err, stores) {
+  var limit,skip;
+
+  if(typeof(req.query.limit) !== 'undefined'){
+    var x = req.query.limit.split(',');
+    skip = x[0];
+    limit = x[1];
+  }
+
+  Store.find(req.query, null, {limit:limit, skip:skip}, function (err, stores) {
     if(err) { return handleError(res, err); }
     return Response.success(res, stores, true);
   });

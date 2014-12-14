@@ -178,7 +178,7 @@ exports.byCategory = function(req, res){
 	var criteria = {
 		location: null,
 		show: false,
-		limit:10,
+		limit:20,
 		skip: 0
 	};
 
@@ -221,6 +221,7 @@ exports.byCategory = function(req, res){
 		}
 	}
 
+/*
 	if(criteria.location != null){
 		Store.geoNear(criteria.location, {query:{show:criteria.show},spherical:true, limit:criteria.limit, skip:criteria.skip}, function (err, data){
 			if(err){ return Response.error.invalidFormat(res); }
@@ -238,11 +239,14 @@ exports.byCategory = function(req, res){
 			}
 		});
 	} else {
+		*/
 		Store.find({category:req.params.categoryId, show:criteria.show}, null, {limit: criteria.limit, skip:criteria.skip}, function (err, stores){
 			if(err){ return Response.error.invalidFormat(res); }
 			return Response.success(res, stores, true);
 		});
+		/*
 	}
+	*/
 
 }
 

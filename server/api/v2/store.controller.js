@@ -175,11 +175,75 @@ exports.index = function(req, res){
 };
 
 exports.byCategory = function(req, res){
-	var isShow = (typeof(req.query.show_all) !== 'undefined' && req.query.show_all == 'false');
-	Store.find({category:req.params.categoryId, show:!isShow}, function (err, stores){
-		if(err){ return Response.error.invalidFormat(res); }
-		return Response.success(res, stores, true);
-	});
+	var criteria = {
+		location: null,
+		show: false,
+		limit:10,
+		skip: 0
+	};
+
+	if(typeof(req.query.limit) !== 'undefined'){
+		var rawLimit = req.query.limit.split(",");
+		if(rawLimit.length > 1){
+			if(Validate.number(rawLimit[0]) && Validate.number(rawLimit[1])){
+				criteria.skip = parseInt(rawLimit[0]);
+				criteria.limit = parseInt(rawLimit[1]);
+			} else {
+				return Response.error.invalidFormat(res);
+			}
+		} else if(rawLimit.length == 1){
+			if(Validate.number(rawLimit[0])){
+				criteria.limit = parseInt(rawLimit[0]);
+			} else {
+				return Response.error.invalidFormat(res);
+			}
+		}
+	}
+
+	criteria.show = !(typeof(req.query.show_all) !== 'undefined' && req.query.show_all == 'false');
+	
+	if(typeof(req.query.location) !== 'undefined'){
+		var rawLocation = req.query.location.split(",");
+		// pastikan format data adalah pasangan lattitude,longitude
+		if(rawLocation.length > 1){
+			if(Validate.number(rawLocation[0]) && Validate.number(rawLocation[1])){
+				// pastikan nilai lattitude tidak lebih dari 90
+				if(rawLocation[0] < 90){
+					criteria.location = [parseFloat(rawLocation[1]), parseFloat(rawLocation[0])]; // [llongitude,lattitude]
+				} else {
+					return Response.error.invalidFormat(res);
+				}
+			} else {
+				return Response.error.invalidFormat(res);
+			}
+		} else {
+			return Response.error.invalidFormat(res);
+		}
+	}
+
+	if(criteria.location != null){
+		Store.geoNear(criteria.location, {query:{show:criteria.show},spherical:true, limit:criteria.limit, skip:criteria.skip}, function (err, data){
+			if(err){ return Response.error.invalidFormat(res); }
+			if(data.length > 0){
+				var theData = [];
+				data.forEach(function(element, index){
+					var item = element.obj;
+					if(item.category == req.params.categoryId){
+						theData[index] = item;
+					}
+				});
+				return Response.success(res, theData, true);
+			} else {
+				return Response.nodata(res);
+			}
+		});
+	} else {
+		Store.find({category:req.params.categoryId, show:criteria.show}, null, {limit: criteria.limit, skip:criteria.skip}, function (err, stores){
+			if(err){ return Response.error.invalidFormat(res); }
+			return Response.success(res, stores, true);
+		});
+	}
+
 }
 
 exports.show = function(req, res){

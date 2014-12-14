@@ -16,12 +16,13 @@ var Response = Helpers.Response;
 // fungsi untuk melakukan autentifikasi awal
 var VALIDATE = {
 	Token: function(req, res, next){
+		console.log(appToken);
 		if(Validate.string(req.headers.token)){
 			jwt.verify(req.headers.token,"kulinerapptoken", function (err, decoded){
 				if(err){
 					Response.error.invalidToken(res);
 				}
-				if(decoded.media === 'device' || decoded.media === 'web'){
+				if(typeof(decoded) !== 'undefined' && (decoded.media === 'device' || decoded.media === 'web')){
 					next();
 					return;
 				}

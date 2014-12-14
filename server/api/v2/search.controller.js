@@ -58,7 +58,6 @@ exports.index = function(req, res){
 				if(rawLocation[0] < 90){
 					query.location = [parseFloat(rawLocation[1]), parseFloat(rawLocation[0])]; // [llongitude,lattitude]
 				} else {
-					console.log('longitude salah');
 					Response.error.invalidFormat(res);
 				}
 			} else {
@@ -101,7 +100,7 @@ exports.index = function(req, res){
 	}
 
 	if(query.radius){
-		Store.geoNear(query.location, {maxDistance:query.radius, spherical:true}, function (err, data){
+		Store.geoNear(query.location, {query:{show:true},maxDistance:query.radius, spherical:true}, function (err, data){
 			if(err || typeof(data) === 'undefined'){ Response.error.invalidFormat(res); }
 			else { processRadiusResponse(res, query, data);}
 		});
@@ -110,6 +109,8 @@ exports.index = function(req, res){
 		var currentTime = parseInt((new Date().getUTCHours()) + 7);
 		var conditions = (query.keyword_type == 'name') ? {name:new RegExp(query.keyword + '.*','i')} : {tags:new RegExp(query.keyword + '.*','i')};
 		var options = {skip:query.offset, limit: query.limit};
+		// flag untuk menampilan hanya yang di flag show saja.
+		conditions.show = true;
 
 		Store.find(conditions,null,options).populate('category', 'name').exec(function (err, data){
 			if(err) {Response.error.invalidFormat(res);}

@@ -4,7 +4,7 @@ var Helpers = require('../../helpers/helpers');
 var Validate = Helpers.Validate;
 var Response = Helpers.Response;
 var DISTANCE_MULTIPLIER = 6378137; //  konversi satuan meter ke dalam bentuk dari radians
-var CRITERIA = { DISTANCE_DEFAULT: 3000, LOCATION_DEFAULT:null, LIMIT_DEFAULT:20, OFFSET_DEFAULT:0 };
+var CRITERIA = { DISTANCE_DEFAULT: 30000, LOCATION_DEFAULT:null, LIMIT_DEFAULT:20, OFFSET_DEFAULT:0 };
 
 function saveStore(req, res, store){
   var tags = [];
@@ -44,12 +44,18 @@ exports.index = function(req, res){
 
 	// Default request query value
 	var criteria = {
-		distance: 3000,
+		distance: 10000,
 		location: null,
 		limit: 20,
 		offset: 0,
 		show_all: true
 	};
+
+	function getRandomData(){
+		Store.find({sticky:false, show: criteria.show_all},null,{limit:criteria.limit, skip:criteria.offset}, function (err, randomData){
+			return (!err) ? randomData : [];
+		});
+	}
 
 	if(typeof(req.query.show_all) !== 'undefined'){
 		if(req.query.show_all == 'false'){
@@ -112,25 +118,57 @@ exports.index = function(req, res){
 		}
 		if(criteria.location !== null){
 			Store.geoNear(criteria.location,{query:{sticky:false, show:criteria.show_all},limit:criteria.limit,spherical:true, maxDistance: criteria.distance/DISTANCE_MULTIPLIER, distanceMultiplier: DISTANCE_MULTIPLIER}).then(function (geoNearData, stats){
-				if(stickyData.length > 0 && geoNearData.length > 0){
-					return Response.success(res, stickyData.concat(geoNearData), true);
-				}
+
+				// oleh karena format kembalian dari hasil geo near adalah [{dis:<distance>, obj:<{store object}>}]
+				// maka agar proses filtering output pada Response.success dapat diproses
+				// buang terlebih dahulu object 'dis' pada masing-masing object hasil query
+				var theGeoNearData = [];
 				if(geoNearData.length > 0){
-					// kemablikan hanya data geonear
-					return Response.success(res, geoNearData, true);
+					geoNearData.forEach(function(element, index){
+						theGeoNearData[index] = element.obj;
+					});
 				}
-				return Response.nodata(res);
+
+				if(stickyData.length > 0 && theGeoNearData.length > 0){
+					var concatinatedData = stickyData.concat(theGeoNearData);
+					if(concatinatedData.length < 5){
+						Store.find({sticky:false, show: criteria.show_all},null,{limit:criteria.limit, skip:criteria.offset}, function (err, randomData){
+							return (err)  ? Response.success(res, concatinatedData, true) : Response.success(res, concatinatedData.concat(randomData), true);
+						});
+					} else {
+						return Response.success(res, concatinatedData, true);
+					}
+				} else if (stickyData.length > 0){
+					if(stickyData.length < 5) {
+						Store.find({sticky:false, show: criteria.show_all},null,{limit:criteria.limit, skip:criteria.offset}, function (err, randomData){
+							return (err)  ? Response.success(res, stickyData, true) : Response.success(res, stickyData.concat(randomData), true);
+						});
+					} else {
+						return Response.success(res, stickyData, true);
+					}
+				} else if(theGeoNearData.length > 0){
+					if (theGeoNearData.length < 5) {
+						Store.find({sticky:false, show: criteria.show_all},null,{limit:criteria.limit, skip:criteria.offset}, function (err, randomData){
+							return (err)  ? Response.success(res, theGeoNearData, true) : Response.success(res, theGeoNearData.concat(randomData), true);
+						});
+					} else {
+						return Response.success(res, theGeoNearData, true);
+					}	
+				} else {
+					return Response.nodata(res);
+				}
 			});
 		} else {
 			Store.find({sticky:false, show: criteria.show_all},null,{limit:criteria.limit, skip:criteria.offset}, function (err, randomData){
 				if(stickyData.length > 0 && randomData.length > 0){
 					return Response.success(res,stickyData.concat(randomData), true);
-				} 
-				if (randomData.length > 0){
+				} else if (stickyData.length > 0){
+					return Response.success(res, stickyData, true);
+				} else if (randomData.length > 0){
 					return Response.success(res,randomData, true);
+				} else {
+					return Response.nodata(res);
 				}
-				
-				return Response.nodata(res);
 			});
 		}
 	});

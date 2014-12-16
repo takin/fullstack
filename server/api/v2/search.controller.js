@@ -99,53 +99,143 @@ exports.index = function(req, res){
 		}
 	}
 
+	// pattern untuk query pencarian
+	// baik dalam mode radius maupun pencarian biasa dengan keyword dan keywrd_type
+	var searchPattern = new RegExp(query.keyword + '.*','i');
+
 	if(query.radius){
-		Store.geoNear(query.location, {query:{show:true},maxDistance:query.radius, spherical:true}, function (err, data){
+		///////////////////////////////////////////////////////////////////////////////////
+		//
+		// cek field keyword_type untuk membedakan 
+		// apakah yang akan diquery adalah field name atau field tags
+		// query menggunakan regex sehingga nama ataupun tags tidak harus persis sama
+		//
+		//////////////////////////////////////////////////////////////////////////////////
+		var searchQuery = {
+			// hanya kembalikan store yang di-flag show: true
+			show: true,
+			//////////////////////////////////////////////////////////////////////////////////////////////////
+			//
+			// secara defaut, query akan mengembalikan semua store yang memenuhi kriteria
+			// baik yang masih tutup ataupun yang sudah buka (pada jam dilakukannya qyery)
+			// jika user melewatkan query open_only, maka tambahkan kriteria pencarian pada field open_only
+			// dari aplikasi, user hanya dimungkingkan untuk melewatkan value true
+			//
+			///////////////////////////////////////////////////////////////////////////////////////////////////
+			open_only: query.open_only
+		};
+		// construct query berdasarkan field keyword_type
+		var geoNear = {
+			query: {
+				show: true
+			},
+			// flag ini wajib disertakan (mandatory from mongodb) untuk query berdasaran geonear
+			spherical: true,
+			// hanya kembalikan store yang berada dalam radius sesuai dengan nilai yang dikirimkan 
+			// oleh user
+			maxDistance: query.radius,
+			skip:query.offset, 
+			limit: query.limit
+		};
+
+		// jika keyword_type = tags
+		// maka tabahkan query untuk mencari tags yang mirip dengan yang dikirimkan oleh user
+		if(query.keyword_type === 'tags'){
+			geoNear.query.tags = {$in:[searchPattern]};
+		}
+		if(query.keyword_type === 'name'){
+			geoNear.query.name = searchPattern;
+		}
+
+		Store.geoNear(query.location, geoNear, function (err, data){
 			if(err || typeof(data) === 'undefined'){ Response.error.invalidFormat(res); }
-			else { processRadiusResponse(res, query, data);}
+			else {
+				if(data.length > 0){
+					/////////////////////////////////////////////////////////////////////////////////////
+					//
+					// oleh karena format kembalian dari hasil query menggunakan geoNear adalah:
+					// [
+					//		dis:<estimasi jarak store dengan lokasi user>,
+					//		obj:<store object>
+					// ]
+					// sedangkan helper Response hanya akan memformat (melajkukan iterasi filtering)
+					// hanya pada store object (array store object). maka kita perlu membuang object 
+					// dis terlebih dahulu, sehingga yang dikirimkan ke helpers Response.success adalah
+					// hanya array object.
+					// 
+					// selain itu, apabila user melewatkan parameter open_only dimana user hanya ingin 
+					// menapilkan store yang berstatus buka. maka perlu dilakukan filtering untuk mengambil
+					// hanya store yang memiliki field open: true.
+					// field 'open' merupakan field virtual (tidak ada dalam skema real di database, hanya skema buatan mongoosejs)
+					// sehingga kita tidak bisa memasukkan kriteria query show:true
+					// untuk itu, filtering dilakukan pada saat proses iterasi pembuangan object 'dis'
+					//
+					//////////////////////////////////////////////////////////////////////////////////////
+					
+					// inisialisasi array object yang akan dikirimkan 
+					var theObjects  = [];
+					//................................................................................
+					// iterasi jika user tidak melewatkan parameter
+					// ...............................................................................
+				
+					data.forEach(function(element, index){
+						theObjects[index] = element.obj;
+					});
+
+					// jika user melewatkan openOnly = true
+					if(query.open_only){
+						theObjects = theObjects.filter(function (element){
+							return element.open === true;
+						});
+					}
+
+					// tambahkan nama kategori pada setiap store object 
+					Store.populate(theObjects, {path:'category', model:'Category', select:'name'}, function (err, result){
+						/////////////////////////////////////////////////////////////////////////////////////////////////
+						//
+						// kirimkan ke helpers response untuk dilakukan filtering terhadap data yang akan 
+						// dikembalikan ke requester
+						// flag true untuk menandakan output yang akan dikembalikan harus di filter terlebih dahulu
+						//
+						/////////////////////////////////////////////////////////////////////////////////////////////////
+						return Response.success(res, result, true);
+					});
+				} else {
+					// jika hasil pencarian kosong
+					return res.json(data);
+				}
+			}
 		});
 	} else {
 
+		////////////////////////////////////////////////////////////////////////////////////////
+		//
+		// jika user tidak melewatkan parameter location dan radius
+		// artinya pencarian hanya dilakukan berdasarkan tags atau nama store
+		// sehingga tidak perlu menggunakan query geoNear
+		// 
+		///////////////////////////////////////////////////////////////////////////////////////////
 		var currentTime = parseInt((new Date().getUTCHours()) + 7);
-		var conditions = (query.keyword_type == 'name') ? {name:new RegExp(query.keyword + '.*','i')} : {tags:new RegExp(query.keyword + '.*','i')};
+		var conditions = (query.keyword_type == 'name') ? {name:searchPattern} : {tags:{$in:[searchPattern]}};
 		var options = {skip:query.offset, limit: query.limit};
 		// flag untuk menampilan hanya yang di flag show saja.
 		conditions.show = true;
 
 		Store.find(conditions,null,options).populate('category', 'name').exec(function (err, data){
-			if(err) {Response.error.invalidFormat(res);}
+			if(err) {res.end('error occurs')}
 			else {
-				if(query.open_only){
-					data = data.filter(function (element){
-						return element.open === true;
-					});
+				if(data.length > 0){
+					// jika nilai query.open_only = true
+					if(query.open_only){
+						data = data.filter(function (element){
+							return element.open === true;
+						});
+					}
+					Response.success(res, data, true);
+				} else {
+					res.json(data);
 				}
-				Response.success(res, data, true);
 			}
 		});
 	}
 };
-
-function processRadiusResponse(res, query, data){
-	var theData = [];
-	data.forEach(function(element, index){
-		theData[index] = element.obj;
-	});
-
-	if(query.open_only){
-		theData = theData.filter(function (element){
-			return element.open === true;
-		});
-	}
-
-	if(query.keyword_type === null || query.keyword === null){
-		Response.success(res,theData, true);
-	} else {
-		var prop = query.keyword.split(" ");
-		var result = (query.keyword_type === 'tags') ? _.where(theData,{tags:prop}) : _.where(theData,{name:query.keyword});
-		
-		Store.populate(result, {path:'category', model:'Category', select:'name'}, function (err, result){
-			Response.success(res,result, true);
-		});
-	}
-}

@@ -1,10 +1,55 @@
 'use strict';
+var _ = require('lodash');
 var Store = require('../store/store.model');
 var Helpers = require('../../helpers/helpers');
 var Validate = Helpers.Validate;
 var Response = Helpers.Response;
 var DISTANCE_MULTIPLIER = 6378137; //  konversi satuan meter ke dalam bentuk dari radians
 var CRITERIA = { DISTANCE_DEFAULT: 30000, LOCATION_DEFAULT:null, LIMIT_DEFAULT:20, OFFSET_DEFAULT:0 };
+
+function getRandomData(data){
+	/////////////////////////////////////////////////////////////////////////////////////
+	// 
+	// Karena item yang akan ditampilkan di halaman depan dibatasi hanya 5 item
+	// maka agar item yang di tampil tidak monoton ketika user tidak memiliki location
+	// kita lakukan randomize urutan data.
+	// 
+	/////////////////////////////////////////////////////////////////////////////////////
+	var indexesArrayOfRandomizedStore = [];
+	var randomizedStore = [];
+	// jumlah item dalam array
+	var numOfItems = (data.length - 1); 
+	var randomizedArrayIndex = 0;
+
+	if(data.length > 0){
+		while(randomizedArrayIndex < (data.length - 1)){
+			var indexOfItem = Math.floor(Math.random() * numOfItems);
+			//////////////////////////////////////////////////////////////////////////////////
+			//
+			// untuk memastikan tidak ada duplikasi item, maka setiap item yang sudah diambil
+			// dikeluarkan dari list data.
+			// pengecekean menggunakan fitur contain dari lodash 
+			//
+			////////////////////////////////////////////////////////////////////////////////////
+			if(_.contains(indexesArrayOfRandomizedStore, indexOfItem) === false){
+				indexesArrayOfRandomizedStore[randomizedArrayIndex] = indexOfItem;
+				randomizedArrayIndex += 1;
+			}
+		}
+
+		//////////////////////////////////////////////////////////////////////////////
+		//
+		// setelah proses pengambilan index array selesai
+		// selanjutnya ambil data store berdasarkan index array yang sudah diacak tadi
+		//
+		///////////////////////////////////////////////////////////////////////////////
+		indexesArrayOfRandomizedStore.forEach(function(element, index){
+			randomizedStore[index] = data[element];
+		});
+	}
+
+	return randomizedStore;
+}
 
 function saveStore(req, res, store){
   var tags = [];
@@ -44,18 +89,12 @@ exports.index = function(req, res){
 
 	// Default request query value
 	var criteria = {
-		distance: 10000,
+		distance: 70000,
 		location: null,
 		limit: 20,
 		offset: 0,
 		show_all: true
 	};
-
-	function getRandomData(){
-		Store.find({sticky:false, show: criteria.show_all},null,{limit:criteria.limit, skip:criteria.offset}, function (err, randomData){
-			return (!err) ? randomData : [];
-		});
-	}
 
 	if(typeof(req.query.show_all) !== 'undefined'){
 		if(req.query.show_all == 'false'){
@@ -63,8 +102,12 @@ exports.index = function(req, res){
 		}
 	}
 
+	///////////////////////////////////////////////////////////////////////////////
+	//
 	// cek apakah query location dikirimkan atau tidak
 	// cek juga apakah valid atau tidak
+	//
+	///////////////////////////////////////////////////////////////////////////////
 	if(typeof(req.query.location) !== 'undefined'){
 		var rawLocation = req.query.location.split(",");
 		// pastikan format data adalah pasangan lattitude,longitude
@@ -83,8 +126,13 @@ exports.index = function(req, res){
 			return Response.error.invalidFormat(res);
 		}
 	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	//
 	// cek apakah query limit dikirimkan atau tidak
 	// cek juga apakah format valid atau tidak
+	//
+	/////////////////////////////////////////////////////////////////////////////
 	if(typeof(req.query.limit) !== 'undefined'){
 		var rawLimit = req.query.limit.split(",");
 		if(rawLimit.length > 1){
@@ -111,67 +159,95 @@ exports.index = function(req, res){
 			return Response.error.invalidFormat(res);
 		}
 	}
-	// ambil hanya data yang di flag sticky true
-	Store.find({sticky:true, show:criteria.show_all}, function (err,stickyData){
-		if(err){
-			return res.json(err);
-		}
-		if(criteria.location !== null){
-			Store.geoNear(criteria.location,{query:{sticky:false, show:criteria.show_all},limit:criteria.limit,spherical:true, maxDistance: criteria.distance/DISTANCE_MULTIPLIER, distanceMultiplier: DISTANCE_MULTIPLIER}).then(function (geoNearData, stats){
 
-				// oleh karena format kembalian dari hasil geo near adalah [{dis:<distance>, obj:<{store object}>}]
-				// maka agar proses filtering output pada Response.success dapat diproses
-				// buang terlebih dahulu object 'dis' pada masing-masing object hasil query
+	if(criteria.location !== null){
+		//////////////////////////////////////////////////////////////////
+		//
+		// apabila client mengirimkan lokasi, maka lakukan query geoNear
+		//
+		///////////////////////////////////////////////////////////////////
+		Store.geoNear(criteria.location,{query:{show:criteria.show_all},limit:criteria.limit,spherical:true, maxDistance: criteria.distance/DISTANCE_MULTIPLIER, distanceMultiplier: DISTANCE_MULTIPLIER}).then(function (geoNearData, stats){
+
+			/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			//
+			// Secara default, query geoNear mengurutkan item berdasarkan jarak terdekat dengan lokasi user, 
+			// sementara kita butuh store yang di-flag sticky harus berada di urutan paling atas (mesikupn jaraknya paling jauh)
+			// maka kita harus memisahkan store yang di-flag sticky dengan yang tidak untuk selanjutnya nantinya diurutkan ulang
+			// dimana store yang di-flag sticky harus berada di paling awal.
+			//
+			// Selain itu, format kembalian dari hasil geo near adalah [{dis:<distance>, obj:<{store object}>}]
+			// sedangkan helpers Response.success (/server/api/helpers/helpers.js) yang bertugas menangani output
+			// hanya akan memproses array store, maka kita perlu membuang object 'dis' terlebih dahulu sebelum di kirimkan ke 
+			// helpers Response.success
+			//
+			//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			if(geoNearData.length > 0){
+				// array untuk menyimpan store yang bukan sticky
 				var theGeoNearData = [];
-				if(geoNearData.length > 0){
-					geoNearData.forEach(function(element, index){
-						theGeoNearData[index] = element.obj;
-					});
-				}
+				// array untuk menyimpan store yang di-flag sticky
+				var stickyStore  = [];
+				geoNearData.forEach(function(element, index){
+					if(element.obj.sticky){
+						stickyStore.push(element.obj);
+					} else {
+						theGeoNearData.push(element.obj);
+					}
+				});
+				// ----------------------------------------------------------------------------------
+				// selanjutnya concat kedua array, dengan sticky store sebagai referensi
+				// sehingga dipastikan array sticky store berada di urutan paling depan
+				// ----------------------------------------------------------------------------------
+				var concatinatedData = stickyStore.concat(theGeoNearData);
+				// kembalikan ke client.
+				// flag true menandakan store harus diformat sebelum dikembalika
+				return Response.success(res, concatinatedData, true);
+			} else {
+				return res.json('Tidak ada data');
+			}
+		});
+	} else {
+		/////////////////////////////////////////////////////////////////////////////
+		//
+		// jika tidak ada location maka lakukan query biasa dengan kriteria default
+		// hanya menampilkan store yang di flag show: true
+		//
+		/////////////////////////////////////////////////////////////////////////////
+		Store.find({show: criteria.show_all},null,{limit:criteria.limit, skip:criteria.offset}, function (err, data){
 
-				if(stickyData.length > 0 && theGeoNearData.length > 0){
-					var concatinatedData = stickyData.concat(theGeoNearData);
-					if(concatinatedData.length < 5){
-						Store.find({sticky:false, show: criteria.show_all},null,{limit:criteria.limit, skip:criteria.offset}, function (err, randomData){
-							return (err)  ? Response.success(res, concatinatedData, true) : Response.success(res, concatinatedData.concat(randomData), true);
-						});
+			if(data.length > 0){
+				var stickyStore = [];
+				var defaultStore = [];
+
+				data.forEach(function(element, index){
+					if(element.sticky){
+						stickyStore.push(element);
 					} else {
-						return Response.success(res, concatinatedData, true);
+						defaultStore.push(element);
 					}
-				} else if (stickyData.length > 0){
-					if(stickyData.length < 5) {
-						Store.find({sticky:false, show: criteria.show_all},null,{limit:criteria.limit, skip:criteria.offset}, function (err, randomData){
-							return (err)  ? Response.success(res, stickyData, true) : Response.success(res, stickyData.concat(randomData), true);
-						});
-					} else {
-						return Response.success(res, stickyData, true);
-					}
-				} else if(theGeoNearData.length > 0){
-					if (theGeoNearData.length < 5) {
-						Store.find({sticky:false, show: criteria.show_all},null,{limit:criteria.limit, skip:criteria.offset}, function (err, randomData){
-							return (err)  ? Response.success(res, theGeoNearData, true) : Response.success(res, theGeoNearData.concat(randomData), true);
-						});
-					} else {
-						return Response.success(res, theGeoNearData, true);
-					}	
-				} else {
-					return Response.nodata(res);
-				}
-			});
-		} else {
-			Store.find({sticky:false, show: criteria.show_all},null,{limit:criteria.limit, skip:criteria.offset}, function (err, randomData){
-				if(stickyData.length > 0 && randomData.length > 0){
-					return Response.success(res,stickyData.concat(randomData), true);
-				} else if (stickyData.length > 0){
-					return Response.success(res, stickyData, true);
-				} else if (randomData.length > 0){
-					return Response.success(res,randomData, true);
-				} else {
-					return Response.nodata(res);
-				}
-			});
-		}
-	});
+				});
+				/////////////////////////////////////////////////////////////////////////
+				//
+				// Setelah data store yang ber-sticky dipisah, selanjutnya adalah
+				// kita random urutan data store yang tidak di sticky 
+				// tujuannya adalah agar store yang ditampilkan tidak monoton.
+				//
+				/////////////////////////////////////////////////////////////////////////
+				var randomizedStore = getRandomData(data);
+				///////////////////////////////////////////////////////////////////////////
+				//
+				// Setelah itu, data sticky dengan yang random disatukan kembali
+				// dengan acuan store yang di sticky yang ada di urutan terdepan
+				//
+				////////////////////////////////////////////////////////////////////////
+				var concatinatedData = stickyStore.concat(randomizedStore);
+
+				return Response.success(res, concatinatedData, true);
+
+			} else {
+				return res.json('Tidak ada data');
+			}
+		});
+	}
 };
 
 exports.byCategory = function(req, res){
@@ -221,32 +297,10 @@ exports.byCategory = function(req, res){
 		}
 	}
 
-/*
-	if(criteria.location != null){
-		Store.geoNear(criteria.location, {query:{show:criteria.show},spherical:true, limit:criteria.limit, skip:criteria.skip}, function (err, data){
-			if(err){ return Response.error.invalidFormat(res); }
-			if(data.length > 0){
-				var theData = [];
-				data.forEach(function(element, index){
-					var item = element.obj;
-					if(item.category == req.params.categoryId){
-						theData[index] = item;
-					}
-				});
-				return Response.success(res, theData, true);
-			} else {
-				return Response.nodata(res);
-			}
-		});
-	} else {
-		*/
-		Store.find({category:req.params.categoryId, show:criteria.show}, null, {limit: criteria.limit, skip:criteria.skip}, function (err, stores){
-			if(err){ return Response.error.invalidFormat(res); }
-			return Response.success(res, stores, true);
-		});
-		/*
-	}
-	*/
+	Store.find({category:req.params.categoryId, show:criteria.show}, null, {limit: criteria.limit, skip:criteria.skip}, function (err, stores){
+		if(err){ return Response.error.invalidFormat(res); }
+		return Response.success(res, stores, true);
+	});
 
 }
 
@@ -282,13 +336,14 @@ exports.update = function (req, res) {
   if(req.body._id) { delete req.body._id; }
   Store.findById(req.params.store, function (err, store) {
     if(err || typeof(store) === 'undefined' || store === null) { return Response.nodata(res); }
-    /**
-     * re-generate array tags
-     * hapus semua isi masing-masing array, dan isikan kembali dengan nilai array 
-     * yang dikirimkan oleh user. hal ini harus dilakukan karena jika tidak, maka proses 
-     * penghapusan elemen array tertentu tidak dapat dilakukan
-     * 
-     */
+    /////////////////////////////////////////////////////////////////////////////////////////////
+    //
+    // re-generate array tags
+    // hapus semua isi masing-masing array, dan isikan kembali dengan nilai array 
+    // yang dikirimkan oleh user. hal ini harus dilakukan karena jika tidak, maka proses 
+    // penghapusan elemen array tertentu tidak dapat dilakukan
+    //
+    //////////////////////////////////////////////////////////////////////////////////////////////
       Category.findById(store.category, function (err, category){
         if(store.category.toString() !== req.body.category){
           category.storeMember.pop(store._id);

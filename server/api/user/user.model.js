@@ -14,7 +14,7 @@ var UserSchema = new Schema({
   role          : {type:String,default:'user'},
   hashedPassword: String,
   provider      : String,
-  providerId    : String,
+  providerId    : {type:String, required:true, index:true}, // id facebook
   salt          : String
 });
 

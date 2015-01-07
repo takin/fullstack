@@ -8,7 +8,8 @@ var Validate = Helpers.Validate;
 var Response = Helpers.Response;
 var DISTANCE_MULTIPLIER = 6378137; //  konversi satuan meter ke dalam bentuk dari radians
 var CRITERIA = { DISTANCE_DEFAULT: 3000, LOCATION_DEFAULT:null, LIMIT_DEFAULT:20, OFFSET_DEFAULT:0 };
-
+var GIMMICK_WORDS = ["terserah","apa aja"];
+var GIMMICK_RESPONSE = ["kalau cuma terserah mah cari pacar aja!!", "kamu pikir aku itu pacarmu ??"];
 exports.index = function(req, res){
 	
 	var query = {
@@ -16,7 +17,11 @@ exports.index = function(req, res){
 		offset: 0,
 		open_only: false,
 		keyword: null,
-		keyword_type: null
+		keyword_type: null,
+		getGimmick: function(){
+			var indexOfGimmick = _.indexOf(GIMMICK_WORDS, this.keyword);
+			return (indexOfGimmick !== -1) ? GIMMICK_RESPONSE[indexOfGimmick] : null;
+		}
 	};
 
 	var SEARCH_RESULT;
@@ -25,7 +30,10 @@ exports.index = function(req, res){
 		Response.error.invalidFormat(res);
 	}
 
-	if(typeof(req.query.keyword) === 'undefined' && typeof(req.query.keyword_type) !== 'undefined' || typeof(req.query.keyword_type) === 'undefined' && typeof(req.query.keyword) !== 'undefined'){
+	// if(typeof(req.query.keyword) === 'undefined' && typeof(req.query.keyword_type) !== 'undefined' || typeof(req.query.keyword_type) === 'undefined' && typeof(req.query.keyword) !== 'undefined'){
+	// 	Response.error.invalidFormat(res);
+	// }
+	if(typeof(req.query.keyword) === 'undefined'){
 		Response.error.invalidFormat(res);
 	}
 
@@ -41,13 +49,13 @@ exports.index = function(req, res){
 		query.keyword = req.query.keyword.replace('/\+/', ' ');
 	}
 
-	if(typeof(req.query.keyword_type) !== 'undefined'){
-		if(req.query.keyword_type === 'tags' || req.query.keyword_type === 'name'){
-			query.keyword_type = req.query.keyword_type;
-		} else {
-			Response.error.invalidFormat(res);
-		}
-	}
+	// if(typeof(req.query.keyword_type) !== 'undefined'){
+	// 	if(req.query.keyword_type === 'tags' || req.query.keyword_type === 'name'){
+	// 		query.keyword_type = req.query.keyword_type;
+	// 	} else {
+	// 		Response.error.invalidFormat(res);
+	// 	}
+	// }
 
 	if(typeof(req.query.location) !== 'undefined'){
 		var rawLocation = req.query.location.split(",");
@@ -103,6 +111,10 @@ exports.index = function(req, res){
 	// baik dalam mode radius maupun pencarian biasa dengan keyword dan keywrd_type
 	var searchPattern = new RegExp(query.keyword + '.*','i');
 
+	if(query.getGimmick() !== null){
+		return res.json({code:200, isGimmick:true, message:query.getGimmick()});
+	}
+
 	if(query.radius){
 		///////////////////////////////////////////////////////////////////////////////////
 		//
@@ -127,6 +139,7 @@ exports.index = function(req, res){
 		// construct query berdasarkan field keyword_type
 		var geoNear = {
 			query: {
+				tags: {$in:[searchPattern]},
 				show: true
 			},
 			// flag ini wajib disertakan (mandatory from mongodb) untuk query berdasaran geonear
@@ -140,14 +153,14 @@ exports.index = function(req, res){
 
 		// jika keyword_type = tags
 		// maka tabahkan query untuk mencari tags yang mirip dengan yang dikirimkan oleh user
-		if(query.keyword_type === 'tags'){
-			geoNear.query.tags = {$in:[searchPattern]};
-		}
-		if(query.keyword_type === 'name'){
-			geoNear.query.name = searchPattern;
-		}
+		// if(query.keyword_type === 'tags'){
+			// geoNear.query.tags = {$in:[searchPattern]};
+		// }
+		// if(query.keyword_type === 'name'){
+		// 	geoNear.query.name = searchPattern;
+		// }
 
-		Store.geoNear(query.location, geoNear, function (err, data){
+		Store.geoNear(query.location, {query:{tags:{$in:[searchPattern]}}}, function (err, data){
 			if(err || typeof(data) === 'undefined'){ Response.error.invalidFormat(res); }
 			else {
 				if(data.length > 0){
@@ -202,7 +215,7 @@ exports.index = function(req, res){
 					});
 				} else {
 					// jika hasil pencarian kosong
-					return res.json(data);
+					return res.end();
 				}
 			}
 		});
@@ -216,12 +229,12 @@ exports.index = function(req, res){
 		// 
 		///////////////////////////////////////////////////////////////////////////////////////////
 		var currentTime = parseInt((new Date().getUTCHours()) + 7);
-		var conditions = (query.keyword_type == 'name') ? {name:searchPattern} : {tags:{$in:[searchPattern]}};
+		// var conditions = (query.keyword_type == 'name') ? {name:searchPattern} : {tags:{$in:[searchPattern]}};
 		var options = {skip:query.offset, limit: query.limit};
 		// flag untuk menampilan hanya yang di flag show saja.
-		conditions.show = true;
+		// conditions.show = true;
 
-		Store.find(conditions,null,options).populate('category', 'name').exec(function (err, data){
+		Store.find({tags:{$in:[searchPattern]}, show:true},null,options).populate('category', 'name').exec(function (err, data){
 			if(err) {res.end('error occurs')}
 			else {
 				if(data.length > 0){
@@ -233,7 +246,7 @@ exports.index = function(req, res){
 					}
 					Response.success(res, data, true);
 				} else {
-					res.json(data);
+					return res.end();
 				}
 			}
 		});

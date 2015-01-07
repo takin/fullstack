@@ -2,6 +2,7 @@
 
 var express = require('express');
 var store = require('./store.controller');
+var user = require('./user.controller');
 var search = require('./search.controller');
 var photo = require('./photo.controller');
 var comment = require('./comment.controller');
@@ -37,4 +38,5 @@ router.post('/categories', auth.hasRole('admin'), category.create);
 router.put('/categories/:id', auth.hasRole('admin'), category.update);
 router.delete('/categories/:id', auth.hasRole('admin'), category.destroy);
 
+router.post('/user', authV2.isAllowed, user.create);
 module.exports = router;
